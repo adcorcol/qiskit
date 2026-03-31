@@ -1331,6 +1331,42 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
         )
         self.assertGreaterEqual(ratio, self.threshold)
 
+    @unittest.skipUnless(optionals.HAS_MATPLOTLIB, "needs matplotlib")
+    def test_if_else_op_non_builder_cregbundle(self):
+        """Non-builder (compose-style) IfElse with cregbundle=True must not crash.
+
+        Regression test for https://github.com/Qiskit/qiskit/issues/15823.
+        Builder-style control flow reuses outer Clbit objects; compose-style
+        creates independent ones that do not live in the outer circuit — the
+        original code called circuit.find_bit on the wrong circuit.
+        """
+        qr = QuantumRegister(2, "q")
+        cr = ClassicalRegister(2, "c")
+        qc = QuantumCircuit(qr, cr)
+        qc.h(0)
+        qc.measure(0, cr[0])
+
+        # Non-builder style: inner circuit has its own independent Clbit objects
+        true_body = QuantumCircuit(1, 1)
+        true_body.x(0)
+
+        false_body = QuantumCircuit(1, 1)
+        false_body.z(0)
+
+        qc.append(IfElseOp((cr[0], 1), true_body, false_body), [qr[0]], [cr[0]])
+
+        fname = "if_else_non_builder_cregbundle.png"
+        self.circuit_drawer(qc, output="mpl", cregbundle=True, filename=fname)
+
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
     def test_if_else_op_textbook_style(self):
         """Test the IfElseOp with else in textbook style"""
         qr = QuantumRegister(4, "q")

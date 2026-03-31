@@ -419,6 +419,7 @@ class MatplotlibDrawer:
 
                 op = node.op
                 node_data[node] = NodeData()
+                node_data[node].circuit = outer_circuit
                 node_data[node].width = WID
                 num_ctrl_qubits = getattr(op, "num_ctrl_qubits", 0)
                 if (
@@ -576,12 +577,18 @@ class MatplotlibDrawer:
                         )
                         for outer, inner in zip(node.cargs, circuit.clbits):
                             if self._cregbundle and (
-                                (in_reg := get_bit_register(outer_circuit, inner)) is not None
+                                (in_reg := get_bit_register(circuit, inner)) is not None
                             ):
                                 out_reg = get_bit_register(outer_circuit, outer)
                                 flow_wire_map.update({in_reg: wire_map[out_reg]})
                             else:
-                                flow_wire_map.update({inner: wire_map[outer]})
+                                if self._cregbundle and (
+                                    (out_reg := get_bit_register(outer_circuit, outer))
+                                    is not None
+                                ):
+                                    flow_wire_map.update({inner: wire_map[out_reg]})
+                                else:
+                                    flow_wire_map.update({inner: wire_map[outer]})
 
                         # Get the layered node lists and instantiate a new drawer class for
                         # the circuit inside the ControlFlowOp.
@@ -606,7 +613,7 @@ class MatplotlibDrawer:
 
                         # Recursively call _get_layer_widths for the circuit inside the ControlFlowOp
                         flow_widths = flow_drawer._get_layer_widths(
-                            node_data, flow_wire_map, outer_circuit, glob_data
+                            node_data, flow_wire_map, circuit, glob_data
                         )
                         layer_widths.update(flow_widths)
 
@@ -798,7 +805,7 @@ class MatplotlibDrawer:
                 for carg in node.cargs:
                     if carg in self._clbits:
                         if self._cregbundle:
-                            register = get_bit_register(outer_circuit, carg)
+                            register = get_bit_register(self._circuit, carg)
                             if register is not None:
                                 c_indxs.append(wire_map[register])
                             else:
@@ -1247,7 +1254,7 @@ class MatplotlibDrawer:
             override_fc = True
             registers = collections.defaultdict(list)
             for bit in condition_bits:
-                registers[get_bit_register(outer_circuit, bit)].append(bit)
+                registers[get_bit_register(node_data[node].circuit, bit)].append(bit)
             # Registerless bits don't care whether cregbundle is set.
             cond_pos.extend(cond_xy[wire_map[bit] - first_clbit] for bit in registers.pop(None, ()))
             if self._cregbundle:
@@ -1276,7 +1283,7 @@ class MatplotlibDrawer:
 
             # If it's a register bit and cregbundle, need to use the register to find the location
             elif self._cregbundle and isinstance(cond_bit_reg, Clbit):
-                register = get_bit_register(outer_circuit, cond_bit_reg)
+                register = get_bit_register(node_data[node].circuit, cond_bit_reg)
                 if register is not None:
                     cond_pos.append(cond_xy[wire_map[register] - first_clbit])
                 else:
@@ -1332,7 +1339,7 @@ class MatplotlibDrawer:
         """Draw the measure symbol and the line to the clbit"""
         qx, qy = node_data[node].q_xy[0]
         cx, cy = node_data[node].c_xy[0]
-        register, _, reg_index = get_bit_reg_index(outer_circuit, node.cargs[0])
+        register, _, reg_index = get_bit_reg_index(node_data[node].circuit, node.cargs[0])
 
         # draw gate box
         self._gate(node, node_data, glob_data)
@@ -2066,6 +2073,9 @@ class NodeData:
 
         # Node data for color
         self.fc = self.ec = self.lc = self.sc = self.gt = self.tc = 0
+
+        # Circuit this node belongs to (used to look up bits in the correct scope)
+        self.circuit = None
 
         # Special values stored for ControlFlowOps
         self.nest_depth = 0
