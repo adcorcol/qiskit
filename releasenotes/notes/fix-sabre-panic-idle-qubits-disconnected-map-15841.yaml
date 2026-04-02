@@ -1,0 +1,16 @@
+---
+fixes:
+  - |
+    Fixed a Rust panic in :class:`.SabreLayout` when transpiling a circuit that has idle qubits
+    onto a disconnected :class:`.CouplingMap` whose largest connected component is smaller than
+    the total number of virtual qubits in the circuit.  The panic manifested as an
+    ``index out of bounds`` error in ``nlayout.rs`` and was triggered at all optimization levels.
+
+    The root cause was in ``distribute_components``: two separate code paths that return a
+    ``TargetSubset`` (meaning "route the whole DAG onto this single hardware component") were
+    checking the number of *gated* qubits rather than ``dag.num_qubits()``.  Because idle qubits
+    are dropped by the interaction-graph pass inside ``separate_dag``, the hardware component
+    selected could be too small to hold all virtual qubits, producing an out-of-bounds access
+    when Sabre routing tried to look up a virtual qubit index in the layout.
+
+    Fixed by :pull:`15841`.

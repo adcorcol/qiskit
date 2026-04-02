@@ -175,12 +175,7 @@ pub fn distribute_components(dag: &mut DAGCircuit, target: &Target) -> PyResult<
         return Ok(DisjointSplit::NoneNeeded);
     }
     if let Some(largest_component) = cmap_components.iter().max_by_key(|x| x.len()) {
-        let num_active_qubits = dag
-            .qubit_io_map()
-            .iter()
-            .filter(|[source, target]| dag.dag().find_edge(*source, *target).is_none())
-            .count();
-        if largest_component.len() >= num_active_qubits {
+        if largest_component.len() >= dag.num_qubits() {
             return Ok(DisjointSplit::TargetSubset(
                 largest_component
                     .iter()
@@ -252,7 +247,13 @@ pub fn distribute_components(dag: &mut DAGCircuit, target: &Target) -> PyResult<
             Ok((out_dag, subgraph))
         })
         .collect::<PyResult<Vec<_>>>()?;
-    if out_component_pairs.len() == 1 {
+    // `TargetSubset` is only valid when the physical component is large enough for ALL virtual
+    // qubits in the original DAG, not just the active (gated) ones.  `separate_dag` drops idle
+    // qubits, so `sub_dag.num_qubits()` is not the right check here — we must compare against
+    // `dag.num_qubits()` to account for qubits that carry no gates but still need a physical slot.
+    if out_component_pairs.len() == 1
+        && out_component_pairs[0].1.node_count() >= dag.num_qubits()
+    {
         return Ok(DisjointSplit::TargetSubset(
             out_component_pairs[0]
                 .1

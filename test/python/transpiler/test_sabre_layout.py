@@ -16,7 +16,7 @@ import unittest
 
 import math
 
-from qiskit import QuantumRegister, QuantumCircuit
+from qiskit import QuantumRegister, QuantumCircuit, transpile
 from qiskit.circuit import library as lib, Parameter
 from qiskit.circuit.classical import expr, types
 from qiskit.circuit.library import efficient_su2, quantum_volume
@@ -538,6 +538,45 @@ class TestDisjointDeviceSabreLayout(QiskitTestCase):
         self.assertEqual(out.layout.initial_index_layout(filter_ancillas=False), [2, 0, 1])
         self.assertEqual(out.layout.routing_permutation(), [0, 1, 2])
         self.assertEqual(out.layout.final_index_layout(filter_ancillas=False), [2, 0, 1])
+
+
+    def test_idle_qubits_smaller_than_dag_no_panic(self):
+        """Regression test for #15841.
+
+        A circuit whose largest connected interaction component fits in one hardware component,
+        but whose total qubit count (including idle qubits) exceeds that component's size, must
+        not panic.  Previously, ``distribute_components`` counted only gated qubits when deciding
+        whether to take the ``TargetSubset`` fast path, causing an out-of-bounds access in NLayout.
+        """
+        qc = QuantumCircuit(4)
+        qc.h(0)
+        qc.h(2)
+        qc.cx(0, 2)
+        # qubits 1 and 3 are idle; each hardware component only has 2 slots
+        cmap = CouplingMap([[0, 1], [1, 0], [2, 3], [3, 2]])
+        layout_routing_pass = SabreLayout(cmap, seed=42, swap_trials=1, layout_trials=1)
+        out = layout_routing_pass(qc)
+        # The CX must land on physically adjacent qubits
+        cx_inst = next(inst for inst in out.data if inst.operation.name == "cx")
+        phys_0 = out.find_bit(cx_inst.qubits[0]).index
+        phys_1 = out.find_bit(cx_inst.qubits[1]).index
+        self.assertIn((phys_0, phys_1), cmap.get_edges())
+
+    def test_idle_qubits_smaller_than_dag_transpile_no_panic(self):
+        """Regression test for #15841 at the transpile() level with optimization_level=3."""
+        qc = QuantumCircuit(4)
+        qc.h(0)
+        qc.h(2)
+        qc.cx(0, 2)
+        cmap = CouplingMap([[0, 1], [1, 0], [2, 3], [3, 2]])
+        result = transpile(
+            qc,
+            coupling_map=cmap,
+            routing_method="sabre",
+            optimization_level=3,
+            seed_transpiler=42,
+        )
+        self.assertIn("cx", result.count_ops())
 
 
 class TestSabrePreLayout(QiskitTestCase):
