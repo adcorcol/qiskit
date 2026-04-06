@@ -4713,9 +4713,10 @@ class TestCircuitControlFlowOps(QiskitVisualizationTestCase):
         for i in range(2):
             qc.compose(cell, qubits=[i], clbits=[i], inplace=True)
 
-        # Should not raise CircuitError
+        # Should not raise CircuitError; measure op must appear for each qubit
         result = str(circuit_drawer(qc, output="text", cregbundle=True))
         self.assertIn("c: 2/", result)
+        self.assertEqual(result.count("┤M├"), 2, "expected one measure per qubit in output")
 
 
 class TestCircuitAnnotatedOperations(QiskitVisualizationTestCase):

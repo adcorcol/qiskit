@@ -579,6 +579,8 @@ class MatplotlibDrawer:
                             if self._cregbundle and (
                                 (in_reg := get_bit_register(circuit, inner)) is not None
                             ):
+                                # cregbundle: inner bit has a register in the inner circuit;
+                                # map that register to the outer register's wire position.
                                 out_reg = get_bit_register(outer_circuit, outer)
                                 flow_wire_map.update({in_reg: wire_map[out_reg]})
                             else:
@@ -586,6 +588,9 @@ class MatplotlibDrawer:
                                     (out_reg := get_bit_register(outer_circuit, outer))
                                     is not None
                                 ):
+                                    # cregbundle: inner bit has no register in the inner
+                                    # circuit (non-builder CF), but the outer bit does;
+                                    # map inner bit directly to the outer register's wire.
                                     flow_wire_map.update({inner: wire_map[out_reg]})
                                 else:
                                     flow_wire_map.update({inner: wire_map[outer]})
@@ -648,7 +653,7 @@ class MatplotlibDrawer:
                 # based on the width of register_bit and puts it into the param_width. If the
                 # register_bit is small enough, the gate will just use the WID width.
                 elif not self._measure_arrows and isinstance(op, Measure):
-                    register, _, reg_index = get_bit_reg_index(outer_circuit, node.cargs[0])
+                    register, _, reg_index = get_bit_reg_index(node_data[node].circuit, node.cargs[0])
                     if register is not None:
                         param_text = f"{register.name}_{reg_index}"
                     else:
@@ -1125,7 +1130,7 @@ class MatplotlibDrawer:
                         )
                         for ii in clbits_dict
                     ]
-                    self._condition(node, node_data, wire_map, outer_circuit, cond_xy, glob_data)
+                    self._condition(node, node_data, wire_map, cond_xy, glob_data)
 
                 # AnnotatedOperation with ControlModifier
                 mod_control = None
@@ -1138,7 +1143,7 @@ class MatplotlibDrawer:
 
                 # draw measure
                 if isinstance(op, Measure):
-                    self._measure(node, node_data, outer_circuit, glob_data)
+                    self._measure(node, node_data, glob_data)
 
                 # draw barriers, snapshots, etc.
                 elif getattr(op, "_directive", False):
@@ -1226,7 +1231,7 @@ class MatplotlibDrawer:
         node_data[node].sc = sc
         node_data[node].lc = lc
 
-    def _condition(self, node, node_data, wire_map, outer_circuit, cond_xy, glob_data):
+    def _condition(self, node, node_data, wire_map, cond_xy, glob_data):
         """Add a conditional to a gate"""
 
         # For SwitchCaseOp convert the target to a fully closed Clbit or register
@@ -1335,7 +1340,7 @@ class MatplotlibDrawer:
         )
         self._line(qubit_b, clbit_b, lc=self._style["cc"], ls=self._style["cline"])
 
-    def _measure(self, node, node_data, outer_circuit, glob_data):
+    def _measure(self, node, node_data, glob_data):
         """Draw the measure symbol and the line to the clbit"""
         qx, qy = node_data[node].q_xy[0]
         cx, cy = node_data[node].c_xy[0]

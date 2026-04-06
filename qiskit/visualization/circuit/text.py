@@ -1376,12 +1376,17 @@ class TextDrawing:
                 if self.cregbundle and (
                     (in_reg := get_bit_register(circuit, inner)) is not None
                 ):
+                    # cregbundle: inner bit has a register in the inner circuit;
+                    # map that register to the outer register's wire position.
                     out_reg = get_bit_register(self._circuit, outer)
                     flow_wire_map.update({in_reg: wire_map[out_reg]})
                 else:
                     if self.cregbundle and (
                         (out_reg := get_bit_register(self._circuit, outer)) is not None
                     ):
+                        # cregbundle: inner bit has no register in the inner circuit
+                        # (non-builder CF), but the outer bit does; map inner bit
+                        # directly to the outer register's wire position.
                         flow_wire_map.update({inner: wire_map[out_reg]})
                     else:
                         flow_wire_map.update({inner: wire_map[outer]})
@@ -1401,7 +1406,12 @@ class TextDrawing:
                 )
                 for layer_node in layer_nodes:
                     if isinstance(layer_node.op, ControlFlowOp):
-                        # Recurse on this function if nested ControlFlowOps
+                        # Recurse on this function if nested ControlFlowOps.
+                        # Note: non-builder-style ControlFlowOps nested inside another
+                        # non-builder-style ControlFlowOp are a known limitation — the
+                        # inner-inner circuit bits would still need the correct circuit
+                        # context threaded through add_control_flow to be looked up
+                        # correctly (see issue #15822).
                         self._nest_depth += 1
                         self.add_control_flow(layer_node, layers, flow_wire_map)
                         self._nest_depth -= 1
