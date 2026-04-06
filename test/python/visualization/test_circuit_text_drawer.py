@@ -4698,6 +4698,25 @@ class TestCircuitControlFlowOps(QiskitVisualizationTestCase):
         actual = str(qc.draw("text", fold=80, initial_state=False))
         self.assertEqual(actual, expected)
 
+    def test_non_builder_control_flow_cregbundle(self):
+        """Test text drawer doesn't crash with non-builder ControlFlowOp and cregbundle=True.
+
+        Regression test for https://github.com/Qiskit/qiskit/issues/15822.
+        """
+        from qiskit.circuit.classical import expr
+
+        cell = QuantumCircuit([Qubit(), Clbit()])
+        with cell.if_test(expr.lift(True)):
+            cell.measure(0, 0)
+
+        qc = QuantumCircuit(2, 2)
+        for i in range(2):
+            qc.compose(cell, qubits=[i], clbits=[i], inplace=True)
+
+        # Should not raise CircuitError
+        result = str(circuit_drawer(qc, output="text", cregbundle=True))
+        self.assertIn("c: 2/", result)
+
 
 class TestCircuitAnnotatedOperations(QiskitVisualizationTestCase):
     """Test AnnotatedOperations and other non-Instructions."""

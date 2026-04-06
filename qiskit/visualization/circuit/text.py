@@ -1098,10 +1098,13 @@ class TextDrawing:
                 )
         return (gates, top_box, bot_box, in_box, args_qubits)
 
-    def _node_to_gate(self, node, layer, gate_wire_map):
+    def _node_to_gate(self, node, layer, gate_wire_map, circuit=None):
         """Convert a dag op node into its corresponding Gate object, and establish
         any connections it introduces between qubits. gate_wire_map is the flow_wire_map
-        if gate is inside a ControlFlowOp, else it's self._wire_map"""
+        if gate is inside a ControlFlowOp, else it's self._wire_map.
+        circuit is the circuit the node belongs to; defaults to self._circuit."""
+        if circuit is None:
+            circuit = self._circuit
         op = node.op
         current_cons = []
         current_cons_cond = []
@@ -1111,7 +1114,7 @@ class TextDrawing:
 
         # For measure_arrows False, put the reg_bit into the params string
         if isinstance(op, Measure) and not self.measure_arrows:
-            register, _, reg_index = get_bit_reg_index(self._circuit, node.cargs[0])
+            register, _, reg_index = get_bit_reg_index(circuit, node.cargs[0])
             if register is not None:
                 params = f"{register.name}_{reg_index}"
             else:
@@ -1148,14 +1151,15 @@ class TextDrawing:
         if self.measure_arrows and isinstance(op, Measure):
             gate = MeasureFrom()
             layer.set_qubit(node.qargs[0], gate)
-            register, _, reg_index = get_bit_reg_index(self._circuit, node.cargs[0])
+            register, _, reg_index = get_bit_reg_index(circuit, node.cargs[0])
             if self.cregbundle and register is not None:
                 layer.set_clbit(
                     node.cargs[0],
                     MeasureTo(str(reg_index)),
+                    circuit=circuit,
                 )
             else:
-                layer.set_clbit(node.cargs[0], MeasureTo())
+                layer.set_clbit(node.cargs[0], MeasureTo(), circuit=circuit)
 
         elif getattr(op, "_directive", False):
             # barrier
@@ -1370,12 +1374,17 @@ class TextDrawing:
             )
             for outer, inner in zip(node.cargs, circuit.clbits):
                 if self.cregbundle and (
-                    (in_reg := get_bit_register(self._circuit, inner)) is not None
+                    (in_reg := get_bit_register(circuit, inner)) is not None
                 ):
                     out_reg = get_bit_register(self._circuit, outer)
                     flow_wire_map.update({in_reg: wire_map[out_reg]})
                 else:
-                    flow_wire_map.update({inner: wire_map[outer]})
+                    if self.cregbundle and (
+                        (out_reg := get_bit_register(self._circuit, outer)) is not None
+                    ):
+                        flow_wire_map.update({inner: wire_map[out_reg]})
+                    else:
+                        flow_wire_map.update({inner: wire_map[outer]})
 
             if circ_num > 0:
                 # Draw a middle box such as Else and Case
@@ -1402,7 +1411,7 @@ class TextDrawing:
                             current_cons,
                             current_cons_cond,
                             connection_label,
-                        ) = self._node_to_gate(layer_node, flow_layer2, flow_wire_map)
+                        ) = self._node_to_gate(layer_node, flow_layer2, flow_wire_map, circuit)
                         flow_layer2.connections.append((connection_label, current_cons))
                         flow_layer2.connections.append((None, current_cons_cond))
 
@@ -1561,14 +1570,18 @@ class Layer:
         """
         self.qubit_layer[self._wire_map[qubit]] = element
 
-    def set_clbit(self, clbit, element):
+    def set_clbit(self, clbit, element, circuit=None):
         """Sets the clbit to the element.
 
         Args:
             clbit (cbit): Element of self.clbits.
             element (DrawElement): Element to set in the clbit
+            circuit: Circuit the clbit belongs to; defaults to self._circuit.
+                Pass the inner circuit when setting bits from inside a ControlFlowOp block.
         """
-        register = get_bit_register(self._circuit, clbit)
+        if circuit is None:
+            circuit = self._circuit
+        register = get_bit_register(circuit, clbit)
         if self.cregbundle and register is not None:
             self.clbit_layer[self._wire_map[register] - len(self.qubits)] = element
         else:
