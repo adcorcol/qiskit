@@ -1367,6 +1367,26 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
         )
         self.assertGreaterEqual(ratio, self.threshold)
 
+    def test_if_else_op_non_builder_measure_cregbundle(self):
+        """Non-builder IfElse containing a Measure with cregbundle=True must not crash.
+
+        Exercises the _measure path via node_data[node].circuit so that
+        get_bit_reg_index is called on the inner block's circuit, not the outer one.
+        Regression test for https://github.com/Qiskit/qiskit/issues/15823.
+        """
+        qr = QuantumRegister(2, "q")
+        cr = ClassicalRegister(2, "c")
+        qc = QuantumCircuit(qr, cr)
+
+        # Non-builder style: inner circuit has its own independent Clbit objects
+        true_body = QuantumCircuit(1, 1)
+        true_body.measure(0, 0)
+
+        qc.append(IfElseOp((cr[0], 1), true_body), [qr[0]], [cr[0]])
+
+        # Should not raise CircuitError about bits not belonging to the outer circuit
+        circuit_drawer(qc, output="mpl", cregbundle=True)
+
     def test_if_else_op_textbook_style(self):
         """Test the IfElseOp with else in textbook style"""
         qr = QuantumRegister(4, "q")

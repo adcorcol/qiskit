@@ -1407,11 +1407,11 @@ class TextDrawing:
                 for layer_node in layer_nodes:
                     if isinstance(layer_node.op, ControlFlowOp):
                         # Recurse on this function if nested ControlFlowOps.
-                        # Note: non-builder-style ControlFlowOps nested inside another
-                        # non-builder-style ControlFlowOp are a known limitation — the
-                        # inner-inner circuit bits would still need the correct circuit
-                        # context threaded through add_control_flow to be looked up
-                        # correctly (see issue #15822).
+                        # Known limitation: non-builder-style ControlFlowOps nested
+                        # inside another non-builder-style ControlFlowOp are not yet
+                        # handled — the inner-inner circuit bits would still be looked
+                        # up against the wrong circuit. Builder-style nesting works
+                        # correctly because inner bits are the same objects as outer bits.
                         self._nest_depth += 1
                         self.add_control_flow(layer_node, layers, flow_wire_map)
                         self._nest_depth -= 1
